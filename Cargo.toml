@@ -6,3 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+winit = "0.30.0" # Provide Vulkan context and window creation
+ash = "0.38.0"   # Unsafe Vulkan bindings for Rust
+glam = "0.27.0"  # Computer graphics math library
