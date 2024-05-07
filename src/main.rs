@@ -20,6 +20,8 @@ struct VulkanApp {
     debug_messenger: vk::DebugUtilsMessengerEXT,
     debug_utils_loader: ash::ext::debug_utils::Instance,
     _physical_device: vk::PhysicalDevice,
+    logical_device: ash::Device,
+    _graphics_queue: vk::Queue,
 }
 
 impl VulkanApp {
@@ -31,6 +33,12 @@ impl VulkanApp {
             utils::debug::setup_debug_utils(true, &entry, &instance);
 
         let physical_device = engine::physical_device::pick_physical_device(&instance);
+        let logical_device =
+            engine::logical_device::create_logical_device(&physical_device, &instance);
+
+        let indices = engine::queue_families::find_queue_families(&physical_device, &instance);
+        let graphics_queue =
+            unsafe { logical_device.get_device_queue(0, indices.graphics_family.unwrap()) };
 
         VulkanApp {
             window: None,
@@ -40,6 +48,8 @@ impl VulkanApp {
             debug_messenger,
             debug_utils_loader,
             _physical_device: physical_device,
+            logical_device,
+            _graphics_queue: graphics_queue,
         }
     }
 
@@ -102,6 +112,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
             println!("Destroying instance");
+            self.logical_device.destroy_device(None);
             if self.is_debug_enabled {
                 self.debug_utils_loader
                     .destroy_debug_utils_messenger(self.debug_messenger, None);
