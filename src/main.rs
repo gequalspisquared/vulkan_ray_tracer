@@ -9,6 +9,7 @@ use winit::window::{Theme, Window};
 use ash;
 use ash::vk;
 
+pub mod engine;
 pub mod utils;
 
 struct VulkanApp {
@@ -18,6 +19,7 @@ struct VulkanApp {
     is_debug_enabled: bool,
     debug_messenger: vk::DebugUtilsMessengerEXT,
     debug_utils_loader: ash::ext::debug_utils::Instance,
+    _physical_device: vk::PhysicalDevice,
 }
 
 impl VulkanApp {
@@ -28,6 +30,8 @@ impl VulkanApp {
         let (debug_utils_loader, debug_messenger) =
             utils::debug::setup_debug_utils(true, &entry, &instance);
 
+        let physical_device = engine::physical_device::pick_physical_device(&instance);
+
         VulkanApp {
             window: None,
             _entry: entry,
@@ -35,6 +39,7 @@ impl VulkanApp {
             is_debug_enabled,
             debug_messenger,
             debug_utils_loader,
+            _physical_device: physical_device,
         }
     }
 
@@ -76,29 +81,6 @@ impl VulkanApp {
     }
 
     fn draw_frame(&mut self) {}
-
-    fn main_loop(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::RedrawRequested => {
-                // self.window.as_ref().unwrap().request_redraw();
-                self.draw_frame();
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: key,
-                        state: ElementState::Pressed,
-                        ..
-                    },
-                ..
-            } => match key {
-                Key::Named(NamedKey::Escape) => event_loop.exit(),
-                _ => {}
-            },
-            _ => {}
-        }
-    }
 }
 
 impl ApplicationHandler for VulkanApp {
@@ -125,6 +107,31 @@ impl Drop for VulkanApp {
                     .destroy_debug_utils_messenger(self.debug_messenger, None);
             }
             self.instance.destroy_instance(None);
+        }
+    }
+}
+
+impl VulkanApp {
+    fn main_loop(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => {
+                // self.window.as_ref().unwrap().request_redraw();
+                self.draw_frame();
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match key {
+                Key::Named(NamedKey::Escape) => event_loop.exit(),
+                _ => {}
+            },
+            _ => {}
         }
     }
 }
