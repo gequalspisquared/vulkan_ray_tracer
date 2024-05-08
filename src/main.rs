@@ -2,6 +2,7 @@ use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key, NamedKey};
+use winit::raw_window_handle::HasWindowHandle;
 use winit::window::{Theme, Window};
 
 use ash;
@@ -11,44 +12,21 @@ pub mod engine;
 pub mod utils;
 
 struct VulkanApp {
-    window: Option<Window>,
-    _entry: ash::Entry,
-    instance: ash::Instance,
+    props: Option<VulkanAppProperties>,
     is_debug_enabled: bool,
-    debug_messenger: vk::DebugUtilsMessengerEXT,
-    debug_utils_loader: ash::ext::debug_utils::Instance,
-    _physical_device: vk::PhysicalDevice,
-    logical_device: ash::Device,
-    _graphics_queue: vk::Queue,
 }
 
 impl VulkanApp {
-    pub fn new(is_debug_enabled: bool) -> VulkanApp {
-        let entry = ash::Entry::linked();
-        let instance = engine::instance::create_instance(&entry, is_debug_enabled);
-
-        let (debug_utils_loader, debug_messenger) =
-            utils::debug::setup_debug_utils(true, &entry, &instance);
-
-        let physical_device = engine::physical_device::pick_physical_device(&instance);
-        let logical_device =
-            engine::logical_device::create_logical_device(&physical_device, &instance);
-
-        let indices = engine::queue_families::find_queue_families(&physical_device, &instance);
-        let graphics_queue =
-            unsafe { logical_device.get_device_queue(0, indices.graphics_family.unwrap()) };
-
+    fn new(is_debug_enabled: bool) -> Self {
         VulkanApp {
-            window: None,
-            _entry: entry,
-            instance,
-            is_debug_enabled,
-            debug_messenger,
-            debug_utils_loader,
-            _physical_device: physical_device,
-            logical_device,
-            _graphics_queue: graphics_queue,
+            props: None,
+            is_debug_enabled: is_debug_enabled,
         }
+    }
+
+    fn init_vulkan(&mut self, window: Window) {
+        let props = VulkanAppProperties::new(window, self.is_debug_enabled);
+        self.props = Some(props);
     }
 
     fn init_window(event_loop: &ActiveEventLoop) -> Window {
@@ -62,22 +40,73 @@ impl VulkanApp {
     fn draw_frame(&mut self) {}
 }
 
-impl ApplicationHandler for VulkanApp {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(Self::init_window(event_loop));
-    }
+struct VulkanAppProperties {
+    _window: Window,
+    _entry: ash::Entry,
+    instance: ash::Instance,
+    is_debug_enabled: bool,
+    debug_messenger: vk::DebugUtilsMessengerEXT,
+    debug_utils_loader: ash::ext::debug_utils::Instance,
+    _physical_device: vk::PhysicalDevice,
+    logical_device: ash::Device,
+    _graphics_queue: vk::Queue,
+    _present_queue: vk::Queue,
+    _surface_loader: ash::khr::surface::Instance,
+    _surface: vk::SurfaceKHR,
+}
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        self.main_loop(event_loop, event)
+impl VulkanAppProperties {
+    // init_vulkan
+    fn new(window: Window, is_debug_enabled: bool) -> Self {
+        let entry = ash::Entry::linked();
+        let instance = engine::instance::create_instance(&entry, is_debug_enabled);
+
+        let (debug_utils_loader, debug_messenger) =
+            utils::debug::setup_debug_utils(true, &entry, &instance);
+
+        // let surface = vk::SurfaceKHR::null();
+        let raw_window_handle = window.window_handle().unwrap().as_raw();
+        let surface = engine::surface::create_surface(&entry, &instance, &raw_window_handle);
+        let surface_loader = ash::khr::surface::Instance::new(&entry, &instance);
+
+        let physical_device =
+            engine::physical_device::pick_physical_device(&instance, &surface, &surface_loader);
+        let logical_device = engine::logical_device::create_logical_device(
+            &physical_device,
+            &instance,
+            &surface,
+            &surface_loader,
+        );
+
+        let indices = engine::queue_families::find_queue_families(
+            &physical_device,
+            &instance,
+            &surface,
+            &surface_loader,
+        );
+        let graphics_queue =
+            unsafe { logical_device.get_device_queue(indices.graphics_family.unwrap(), 0) };
+        let present_queue =
+            unsafe { logical_device.get_device_queue(indices.present_family.unwrap(), 0) };
+
+        VulkanAppProperties {
+            _window: window,
+            _entry: entry,
+            instance,
+            is_debug_enabled: is_debug_enabled,
+            debug_messenger,
+            debug_utils_loader,
+            _physical_device: physical_device,
+            logical_device,
+            _graphics_queue: graphics_queue,
+            _present_queue: present_queue,
+            _surface: surface,
+            _surface_loader: surface_loader,
+        }
     }
 }
 
-impl Drop for VulkanApp {
+impl Drop for VulkanAppProperties {
     fn drop(&mut self) {
         unsafe {
             println!("Destroying instance");
@@ -86,8 +115,25 @@ impl Drop for VulkanApp {
                 self.debug_utils_loader
                     .destroy_debug_utils_messenger(self.debug_messenger, None);
             }
+            self._surface_loader.destroy_surface(self._surface, None);
             self.instance.destroy_instance(None);
         }
+    }
+}
+
+impl ApplicationHandler for VulkanApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = Self::init_window(event_loop);
+        self.init_vulkan(window);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        self.main_loop(event_loop, event);
     }
 }
 
@@ -96,7 +142,7 @@ impl VulkanApp {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
-                // self.window.as_ref().unwrap().request_redraw();
+                // self.window.as_ref().request_redraw();
                 self.draw_frame();
             }
             WindowEvent::KeyboardInput {
@@ -116,7 +162,7 @@ impl VulkanApp {
     }
 }
 
-fn main() {
+pub fn main() {
     let event_loop = EventLoop::new().unwrap();
     let mut vulkan_app = VulkanApp::new(true);
 
