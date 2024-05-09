@@ -53,6 +53,7 @@ struct VulkanAppProperties {
     _present_queue: vk::Queue,
     _surface_loader: ash::khr::surface::Instance,
     _surface: vk::SurfaceKHR,
+    _swap_chain: engine::swap_chain::SwapChain,
 }
 
 impl VulkanAppProperties {
@@ -89,6 +90,15 @@ impl VulkanAppProperties {
         let present_queue =
             unsafe { logical_device.get_device_queue(indices.present_family.unwrap(), 0) };
 
+        let swap_chain = engine::swap_chain::SwapChain::new(
+            &physical_device,
+            &instance,
+            &logical_device,
+            &surface,
+            &surface_loader,
+            &window,
+        );
+
         VulkanAppProperties {
             _window: window,
             _entry: entry,
@@ -102,6 +112,7 @@ impl VulkanAppProperties {
             _present_queue: present_queue,
             _surface: surface,
             _surface_loader: surface_loader,
+            _swap_chain: swap_chain,
         }
     }
 }
@@ -110,11 +121,19 @@ impl Drop for VulkanAppProperties {
     fn drop(&mut self) {
         unsafe {
             println!("Destroying instance");
+
+            // Logical Device
+            // Would be better to call drop but I'm not sure how to do so since
+            // self is already &mut
+            self._swap_chain.cleanup(&self.logical_device);
             self.logical_device.destroy_device(None);
+
             if self.is_debug_enabled {
                 self.debug_utils_loader
                     .destroy_debug_utils_messenger(self.debug_messenger, None);
             }
+
+            // Physical Device
             self._surface_loader.destroy_surface(self._surface, None);
             self.instance.destroy_instance(None);
         }

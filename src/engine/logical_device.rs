@@ -2,6 +2,7 @@ use ash;
 use ash::vk;
 
 use crate::engine;
+use crate::utils::required;
 
 pub fn create_logical_device(
     device: &vk::PhysicalDevice,
@@ -31,6 +32,8 @@ pub fn create_logical_device(
         ..Default::default()
     };
 
+    let required_extensions = required::get_required_extensions();
+
     // todo! update with is_debug_enabled
     // let layers = debug::get_required_layers(true);
 
@@ -39,6 +42,8 @@ pub fn create_logical_device(
         p_queue_create_infos: queue_create_infos.as_ptr(),
         queue_create_info_count: queue_create_infos.len() as u32,
         p_enabled_features: &device_features,
+        enabled_extension_count: required_extensions.len() as u32,
+        pp_enabled_extension_names: required_extensions.as_ptr(),
         ..Default::default()
     };
 
