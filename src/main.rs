@@ -59,19 +59,24 @@ struct VulkanAppProperties {
 impl VulkanAppProperties {
     // init_vulkan
     fn new(window: Window, is_debug_enabled: bool) -> Self {
+        // Create an instance
         let entry = ash::Entry::linked();
         let instance = engine::instance::create_instance(&entry, is_debug_enabled);
 
+        // Setup the debug manager
         let (debug_utils_loader, debug_messenger) =
             utils::debug::setup_debug_utils(true, &entry, &instance);
 
-        // let surface = vk::SurfaceKHR::null();
+        // Create the surface
         let raw_window_handle = window.window_handle().unwrap().as_raw();
         let surface = engine::surface::create_surface(&entry, &instance, &raw_window_handle);
         let surface_loader = ash::khr::surface::Instance::new(&entry, &instance);
 
+        // Create the physical device
         let physical_device =
             engine::physical_device::pick_physical_device(&instance, &surface, &surface_loader);
+
+        // Create the logical device
         let logical_device = engine::logical_device::create_logical_device(
             &physical_device,
             &instance,
@@ -90,6 +95,7 @@ impl VulkanAppProperties {
         let present_queue =
             unsafe { logical_device.get_device_queue(indices.present_family.unwrap(), 0) };
 
+        // Create swap chain and image views
         let swap_chain = engine::swap_chain::SwapChain::new(
             &physical_device,
             &instance,
@@ -98,6 +104,8 @@ impl VulkanAppProperties {
             &surface_loader,
             &window,
         );
+
+        // Create graphics pipeline
 
         VulkanAppProperties {
             _window: window,
